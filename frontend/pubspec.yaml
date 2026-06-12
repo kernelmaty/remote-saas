@@ -1,0 +1,25 @@
+name: remotedesk
+description: Cliente RemoteDesk (técnico / host / dashboard)
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_webrtc: ^0.11.7        # captura de pantalla, peer connection, datachannels
+  socket_io_client: ^2.0.3       # señalización
+  dio: ^5.5.0                    # HTTP + interceptores JWT
+  flutter_riverpod: ^2.5.1       # estado
+  flutter_secure_storage: ^9.2.2 # tokens
+  go_router: ^14.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: remotedesk
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: remotedesk
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U remotedesk"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    env_file: ./backend/.env
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  coturn:
+    image: coturn/coturn:4.6
+    network_mode: host          # necesita rango UDP amplio
+    command: >
+      -n --log-file=stdout
+      --realm=remotedesk
+      --use-auth-secret
+      --static-auth-secret=${TURN_SECRET:-cambiar-secreto-coturn}
+      --min-port=49152 --max-port=65535
+      --no-multicast-peers
+    restart: unless-stopped
+
+  # Producción: agregar caddy/nginx con TLS delante de `api`
+volumes:
+  pgdata:
