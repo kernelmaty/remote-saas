@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../core/signaling_service.dart';
 
@@ -14,6 +15,10 @@ class HostCapture {
   final SignalingService signaling;
   RTCPeerConnection? _pc;
   MediaStream? _screen;
+
+  // Subscripciones a streams — deben cancelarse en stop() para evitar leaks
+  StreamSubscription<Map<String, dynamic>>? _offerSub;
+  StreamSubscription<Map<String, dynamic>>? _iceSub;
 
   Future<void> startForSession(
       String sessionId, List<Map<String, dynamic>> iceServers) async {
@@ -36,14 +41,17 @@ class HostCapture {
         // channel 'files': armar receptor de chunks en Fase 2
       };
 
-    signaling.onOffer.stream.listen((d) async {
+    // Guardar subscripciones para cancelarlas en stop()
+    _offerSub = signaling.onOffer.stream.listen((d) async {
       final p = d['payload'];
-      await _pc!.setRemoteDescription(RTCSessionDescription(p['sdp'], p['type']));
+      await _pc!.setRemoteDescription(
+          RTCSessionDescription(p['sdp'], p['type']));
       final answer = await _pc!.createAnswer();
       await _pc!.setLocalDescription(answer);
       signaling.sendAnswer(sessionId, answer.toMap());
     });
-    signaling.onIce.stream.listen((d) async {
+
+    _iceSub = signaling.onIce.stream.listen((d) async {
       final p = d['payload'];
       await _pc!.addCandidate(
           RTCIceCandidate(p['candidate'], p['sdpMid'], p['sdpMLineIndex']));
@@ -56,6 +64,12 @@ class HostCapture {
   }
 
   Future<void> stop() async {
+    // Cancelar subscripciones primero para evitar memory leaks
+    await _offerSub?.cancel();
+    await _iceSub?.cancel();
+    _offerSub = null;
+    _iceSub = null;
+
     _screen?.getTracks().forEach((t) => t.stop());
     await _pc?.close();
   }
