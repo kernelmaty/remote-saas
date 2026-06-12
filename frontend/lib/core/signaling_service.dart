@@ -9,13 +9,14 @@ class SignalingService {
   final String serverUrl;
   io.Socket? _socket;
 
+  // Streams de eventos entrantes
   final onIncomingSession = StreamController<Map<String, dynamic>>.broadcast();
   final onSessionAccepted = StreamController<Map<String, dynamic>>.broadcast();
-  final onOffer = StreamController<Map<String, dynamic>>.broadcast();
-  final onAnswer = StreamController<Map<String, dynamic>>.broadcast();
-  final onIce = StreamController<Map<String, dynamic>>.broadcast();
-  final onChat = StreamController<Map<String, dynamic>>.broadcast();
-  final onSessionEnded = StreamController<Map<String, dynamic>>.broadcast();
+  final onOffer          = StreamController<Map<String, dynamic>>.broadcast();
+  final onAnswer         = StreamController<Map<String, dynamic>>.broadcast();
+  final onIce            = StreamController<Map<String, dynamic>>.broadcast();
+  final onChat           = StreamController<Map<String, dynamic>>.broadcast();
+  final onSessionEnded   = StreamController<Map<String, dynamic>>.broadcast();
 
   void connectAsTechnician(String jwt) => _connect({'token': jwt});
   void connectAsDevice(String deviceId, String deviceToken) =>
@@ -29,20 +30,22 @@ class SignalingService {
     _socket!
       ..on('session:incoming', (d) => onIncomingSession.add(_map(d)))
       ..on('session:accepted', (d) => onSessionAccepted.add(_map(d)))
-      ..on('webrtc:offer', (d) => onOffer.add(_map(d)))
-      ..on('webrtc:answer', (d) => onAnswer.add(_map(d)))
-      ..on('webrtc:ice', (d) => onIce.add(_map(d)))
-      ..on('chat:message', (d) => onChat.add(_map(d)))
-      ..on('session:ended', (d) => onSessionEnded.add(_map(d)));
+      ..on('webrtc:offer',     (d) => onOffer.add(_map(d)))
+      ..on('webrtc:answer',    (d) => onAnswer.add(_map(d)))
+      ..on('webrtc:ice',       (d) => onIce.add(_map(d)))
+      ..on('chat:message',     (d) => onChat.add(_map(d)))
+      ..on('session:ended',    (d) => onSessionEnded.add(_map(d)));
   }
 
   Map<String, dynamic> _map(dynamic d) => Map<String, dynamic>.from(d as Map);
 
   Future<String?> requestSession(String deviceId, {String? ticketId}) async {
     final completer = Completer<String?>();
-    _socket!.emitWithAck('session:request',
-        {'deviceId': deviceId, 'ticketId': ticketId},
-        ack: (res) => completer.complete(res?['sessionId'] as String?));
+    _socket!.emitWithAck(
+      'session:request',
+      {'deviceId': deviceId, 'ticketId': ticketId},
+      ack: (res) => completer.complete(res?['sessionId'] as String?),
+    );
     return completer.future;
   }
 
@@ -59,5 +62,17 @@ class SignalingService {
   void endSession(String sessionId) =>
       _socket!.emit('session:end', {'sessionId': sessionId});
 
-  void dispose() => _socket?.dispose();
+  /// Cierra el socket Y todos los StreamControllers para evitar memory leaks.
+  Future<void> dispose() async {
+    _socket?.dispose();
+    await Future.wait([
+      onIncomingSession.close(),
+      onSessionAccepted.close(),
+      onOffer.close(),
+      onAnswer.close(),
+      onIce.close(),
+      onChat.close(),
+      onSessionEnded.close(),
+    ]);
+  }
 }
